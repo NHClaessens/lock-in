@@ -1,9 +1,10 @@
-import { Flex, Button, Card, Select, SimpleGrid, Text, Input, Slider, SliderTrack, SliderFilledTrack, SliderThumb, Box } from "@chakra-ui/react";
-import { useEffect, useRef, useState } from "react";
+import { Flex, Button, Card, Select, SimpleGrid, Text, Input, Slider, SliderTrack, SliderFilledTrack, SliderThumb, useDisclosure } from "@chakra-ui/react";
+import { useEffect, useState } from "react";
+import MissingFileModal from "./MissingFileModal";
 
 export default function AudioMixer() {
 
-    const [audioContext, _] = useState(new (window.AudioContext || window.webkitAudioContext)())
+    const [audioContext ] = useState(new (window.AudioContext || window.webkitAudioContext)())
 
     const [ sources, setSources ] = useState([])
     const [ sourceOptions, setSourceOptions ] = useState([
@@ -26,8 +27,32 @@ export default function AudioMixer() {
 
     const [ players, setPlayers ] = useState([])
 
-    function createSource(source, setting) {
-        console.log("Create source", source, setting, sources.length)
+    // ask users to replace files that cannot be found
+    const [ toReplace, setToReplace ] = useState([])
+    async function checkBlobUrl(url) {
+        try{
+            return fetch(url)
+            .then(response => {
+                if (response.ok) {
+                    return true;
+                }
+                throw new Error('Blob not found');
+            })
+            .catch(() => {
+                return false;
+            });
+        } catch(error) {
+            return false
+        }
+    }
+
+    let modal = useDisclosure()
+
+    function getReplacement(source, index) {
+        setToReplace([...toReplace, {source: source, index: index}])
+    }
+
+    function createPlayer(source, setting) {
         const audioElement = new Audio(source.path)
         audioElement.loop = true
         const sourceNode = audioContext.createMediaElementSource(audioElement)
@@ -45,12 +70,12 @@ export default function AudioMixer() {
         return { audioElement, sourceNode, gainNode, pannerNode }
     }
 
-    function addSource(sor, set) {
-        let player = createSource(sourceOptions[0], defaultSettings)
-
-        setSources([...sources, sor ?? sourceOptions[0]])
-        setSettings([...settings, set ?? defaultSettings])
+    function addSource() {
+        let player = createPlayer(sourceOptions[0], defaultSettings)
         setPlayers([...players, player])
+
+        setSources([...sources, sourceOptions[0]])
+        setSettings([...settings, defaultSettings])
     }
 
     const parseURL = () => {
@@ -83,20 +108,33 @@ export default function AudioMixer() {
 
     useEffect(() => {
         const url = parseURL();
-
-        console.log(url.sources, url.settings)
         
-        let newPlayers = url.sources.map((source, index) => {
-            return createSource(source, url.settings[index]);
-        });
+        const yurr = async() => {
+            const newPlayers = await url.sources.map( (source, index) => {
+                return createPlayer(source, url.settings[index]);
+            })
+    
+            setPlayers(newPlayers)
+        }
+
+        yurr()
+        
         setSources(url.sources)
         setSettings(url.settings);
-        setPlayers(newPlayers)
+
+
+        url.sources.forEach((element, index) => {
+            checkBlobUrl(element.path).then((res) => {
+                if(!res)
+                getReplacement(element, index)
+            })
+        });
+        
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     const updateURL = (sources, settings) => {
         if(sources.length === 0 || settings.length === 0 || sources.length !== settings.length) return;
-        console.log("update URL", sources, settings)
         const queryParams = new URLSearchParams();
         queryParams.set("sources", encodeURIComponent(JSON.stringify(sources)));
         queryParams.set("settings", encodeURIComponent(JSON.stringify(settings)))
@@ -104,12 +142,21 @@ export default function AudioMixer() {
       };
     useEffect(() => updateURL(sources, settings), [sources, settings])
 
-    function changeSource(index, source) {
-        players[index].audioElement.src = sourceOptions[source].path
+    function addSourceOption(newSource, playerIndex) {
+        let newSourceOptions = [...sourceOptions, newSource]
+        setSourceOptions(newSourceOptions)
+
+        if(playerIndex !== undefined) {
+            changePlayer(playerIndex, newSource)
+        }
+    }
+
+    function changePlayer(index, source) {
+        players[index].audioElement.src = source.path
         players[index].audioElement.load()
 
         let newSources = sources.map((item, i) => {
-            if(i === index) return sourceOptions[source]
+            if(i === index) return source
             else return item
         })
         setSources(newSources)
@@ -119,6 +166,12 @@ export default function AudioMixer() {
             else return item
         })
         setSettings(newSettings)
+    }
+
+    function removeSource(index) {
+        setSources([...sources.slice(0, index), ...sources.slice(index + 1)])
+        setPlayers([...players.slice(0, index), ...players.slice(index + 1)])
+        setSettings([...settings.slice(0, index), ...settings.slice(index + 1)])
     }
 
     async function playAll() {
@@ -175,8 +228,6 @@ export default function AudioMixer() {
             audioContext.resume()
         }
 
-        console.log(players)
-
         let player = players[index].audioElement
         if(player.paused) player.play()
         else player.pause()
@@ -190,10 +241,13 @@ export default function AudioMixer() {
         
     }
 
-
-
-
-    return <Flex p="16px" flexDir="column" gap="16px">
+    return <>
+    <MissingFileModal 
+        isOpen={toReplace.length > 0} onClose={() => {modal.onClose()}} 
+        toReplace={toReplace} addSourceOption={(source, index) => {console.addSourceOption(source, index)}} 
+        removeSource={removeSource} onSubmit={() => {setToReplace([]); updateURL(sources, settings)}}
+    />
+    <Flex p="16px" flexDir="column" gap="16px">
         <Flex justify="center" gap="16px" ml="16px">
             <Button onClick={playAll}>Play all</Button>
             <Button onClick={pauseAll}>Pause all</Button>
@@ -201,7 +255,8 @@ export default function AudioMixer() {
         <SimpleGrid minChildWidth="200px" gap="16px">
             {sources.map((item, index) => <Card key={index} p="16px" gap="8px">
                 <Text>Source</Text>
-                <Select value={sources[index].path} onChange={(e) => changeSource(index, e.target.selectedIndex)}>
+                {players[index].audioElement.src}
+                <Select value={sources[index].path} onChange={(e) => changePlayer(index, sourceOptions[e.target.selectedIndex])}>
                     {sourceOptions.map((item,index) => {
                     return <option value={item.path} key={index}>{item.name}</option>
                     })}
@@ -254,5 +309,5 @@ export default function AudioMixer() {
                 path: url
             }])
         }}/>
-    </Flex>
+    </Flex></>
 }

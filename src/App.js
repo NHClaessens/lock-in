@@ -1,6 +1,5 @@
 import './App.css';
-import { Flex, Button, Center, Input, Slider, Text, SliderTrack, SliderFilledTrack, SliderThumb, Card, SimpleGrid, Select, useColorMode, IconButton, Icon } from '@chakra-ui/react';
-import { useEffect, useState } from 'react';
+import { Flex, useColorMode, Icon } from '@chakra-ui/react';
 import AudioMixer from './Components/AudioMixer';
 
 // function AudioSource() {
@@ -204,7 +203,7 @@ function App() {
   const { colorMode, toggleColorMode } = useColorMode()
   return <>
     <Flex justify="end">
-        <Icon m="16px 16px 0 0" viewBox='0 0 24 24' fill={colorMode == 'dark' ? 'white' : 'black'}
+        <Icon m="16px 16px 0 0" viewBox='0 0 24 24' fill={colorMode === 'dark' ? 'white' : 'black'}
           onClick={toggleColorMode} cursor="pointer"
         >
         <path xmlns="http://www.w3.org/2000/svg" d="M12,22 C17.5228475,22 22,17.5228475 22,12 C22,6.4771525 17.5228475,2 12,2 C6.4771525,2 2,6.4771525 2,12 C2,17.5228475 6.4771525,22 12,22 Z M12,20.5 L12,3.5 C16.6944204,3.5 20.5,7.30557963 20.5,12 C20.5,16.6944204 16.6944204,20.5 12,20.5 Z"></path>
