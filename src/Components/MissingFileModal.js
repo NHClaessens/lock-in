@@ -7,9 +7,6 @@ export default function MissingFileModal({isOpen, onClose, onSubmit, toReplace, 
 
     let done = () => (Object.entries(newFiles).length === toReplace.length)
 
-    console.log("replace", toReplace)
-    console.log("new files", newFiles)
-
     return <Modal isOpen={isOpen} onClose={onClose}>
         <ModalOverlay/>
         <ModalContent>
